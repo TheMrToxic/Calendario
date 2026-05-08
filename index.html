@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Turnos">
+    <meta name="theme-color" content="#000000">
+    <!-- Icono desde el repositorio -->
+    <link rel="apple-touch-icon" href="./icon.png">
+    <link rel="icon" type="image/png" href="./icon.png">
+    <!-- Manifest externo -->
+    <link rel="manifest" href="./manifest.json">
+    <title>Turnos</title>
+    <style>
+        :root {
+            --bg: #000000;
+            --surface: #1c1c1e;
+            --surface-2: #2c2c2e;
+            --surface-3: #3a3a3c;
+            --label: #ffffff;
+            --label-2: #ebebf599;
+            --label-3: #ebebf54d;
+            --label-4: #ebebf52e;
+            --sep: #54545899;
+            --blue: #0a84ff;
+            --green: #30d158;
+            --red: #ff453a;
+            --orange: #ff9f0a;
+            --purple: #bf5af2;
+            --spring: cubic-bezier(0.2, 0.9, 0.3, 1);
+            --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        html { touch-action: manipulation; }
+        ::-webkit-scrollbar { display: none; }
+
+        body {
+            /* Fondo inmersivo con un destello radial en la parte superior */
+            background-color: #000;
+            background-image: radial-gradient(circle at 50% -10%, #1a1b2a 0%, #000000 40%);
+            background-attachment: fixed;
+            color: var(--label);
+            font-family: -apple-system, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        .app {
+            width: 100%;
+            max-width: 428px;
+            padding: 0 20px;
+            /* Margen dinámico para el dock flotante inferior */
+            padding-bottom: calc(max(env(safe-area-inset-bottom), 20px) + 110px);
+            position: relative;
+            z-index: 1;
+            /* Ajuste base para navegadores normales */
+            padding-top: max(env(safe-area-inset-top), 24px);
+        }
+
+        /* Ajuste específico para Isla Dinámica en modo PWA (Instalado en Inicio) */
+        @media (display-mode: standalone) {
+            .app { padding-top: max(env(safe-area-inset-top), 65px); }
+        }
+
+        /* ── Header Extremo ── */
+        .nav {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+
+        .nav-title {
+            font-size: 44px;
+            font-weight: 800;
+            letter-spacing: -1.2px;
+            line-height: 1.05;
+            color: #fff;
+        }
+
+        /* Año con color de acento y ligeramente más suave */
+        .nav-title .yr { 
+            font-weight: 700; 
+            color: var(--label-3); 
+            font-size: 38px;
+            margin-left: 4px;
+        }
+
+        /* Contenedor de botones estilo cápsula de cristal */
+        .nav-actions { 
+            display: flex; 
+            gap: 6px; 
+            background: rgba(255,255,255,0.06);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            padding: 6px;
+            border-radius: 100px;
+            border: 1px solid rgba(255,255,255,0.05);
+            margin-bottom: 4px;
+        }
+
+        .nav-btn {
+            width: 36px; height: 36px;
+            background: transparent;
+            border: none;
+            border-radius: 50%;
+            color: var(--blue);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s var(--spring);
+        }
+        .nav-btn:active { transform: scale(0.8); background: rgba(255,255,255,0.1); }
+        .nav-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+
+        /* ── Calendar Grid (Borde a Borde) ── */
+        .cal {
+            width: 100%;
+            touch-action: pan-y;
+            user-select: none;
+        }
+
+        .cal.al { animation: cL .35s var(--spring); }
+        .cal.ar { animation: cR .35s var(--spring); }
+        @keyframes cL { from{opacity:0;transform:translateX(50px)}to{opacity:1;transform:translateX(0)} }
+        @keyframes cR { from{opacity:0;transform:translateX(-50px)}to{opacity:1;transform:translateX(0)} }
+
+        .wk { 
+            display: grid; 
+            grid-template-columns: repeat(7,1fr); 
+            margin-bottom: 12px; 
+            padding: 0 4px;
+        }
+        .wk span { 
+            text-align: center; 
+            font-size: 13px; 
+            font-weight: 700; 
+            color: var(--label-3);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .gr { 
+            display: grid; 
+            grid-template-columns: repeat(7,1fr); 
+            gap: 8px 6px; 
+        }
+
+        .d {
+            aspect-ratio: 1;
+            border-radius: 16px; /* Forma más cuadrada al estilo iconos de iOS */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 19px;
+            font-weight: 500;
+            color: var(--label);
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.15s var(--spring), box-shadow 0.2s;
+            overflow: hidden;
+            background: transparent;
+        }
+        .d:active { transform: scale(0.85); }
+        .d.e { pointer-events: none; }
+        .d.w { color: var(--label-2); } /* Fines de semana un poco opacos */
+
+        /* Día Actual - Glowing Border */
+        .d.td {
+            box-shadow: inset 0 0 0 2px var(--blue);
+            color: var(--blue);
+            font-weight: 700;
+        }
+        
+        /* Cuando el día actual tiene turno asignado */
+        .d.td.has-shift {
+            box-shadow: inset 0 0 0 3px #fff;
+            color: #fff;
+        }
+
+        .d.rv { animation: dIn .3s var(--spring) both; }
+        @keyframes dIn { from{opacity:0;transform:scale(.6) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)} }
+
+        .bx {
+            position: absolute; top: 4px; right: 4px;
+            width: 14px; height: 14px;
+            background: rgba(255,255,255,0.9); color: #000;
+            border-radius: 50%;
+            font-size: 9px; font-weight: 800;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,.5);
+        }
+
+        /* ── Bottom Dock Flotante (Glassmorphism) ── */
+        .bottom-dock-wrapper {
+            position: fixed;
+            bottom: max(env(safe-area-inset-bottom), 16px);
+            left: 0; right: 0;
+            padding: 0 20px;
+            z-index: 50;
+            pointer-events: none; /* Para que el área transparente no bloquee el scroll */
+        }
+        
+        .bottom-dock {
+            pointer-events: auto;
+            background: rgba(28, 28, 30, 0.75);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 28px;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+        }
+
+        .dock-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            flex: 1;
+        }
+        .dock-item:active { transform: scale(0.9); }
+        .dock-item.ph { opacity: 0.3; pointer-events: none; } /* Ocultar pendientes suavemente si es 0 */
+
+        .dock-val {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--blue);
+            line-height: 1;
+        }
+        .dock-val.alert { color: var(--red); }
+        .dock-lbl {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--label-2);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .dock-sep {
+            width: 1px;
+            height: 36px;
+            background: rgba(255,255,255,0.1);
+        }
+
+        .dock-dots-container {
+            display: flex;
+            gap: 4px;
+            height: 22px;
+            align-items: center;
+            justify-content: center;
+        }
+        .dock-dot { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 6px rgba(0,0,0,0.3); }
+
+        /* ── Glass Modal Base (Mantenido y Pulido) ── */
+        .ov {
+            position: fixed; inset: 0;
+            z-index: 100;
+            display: none;
+            align-items: flex-end;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity .3s var(--ease);
+        }
+        .ov.on { display: flex; }
+        .ov.vis { opacity: 1; }
+
+        .ov::before {
+            content: '';
+            position: absolute; inset: 0;
+            background: rgba(0,0,0,0.65);
+            z-index: -1;
+        }
+
+        /* Contenedor principal del modal */
+        .sh {
+            width: 100%; max-width: 428px;
+            padding: 0 20px;
+            padding-bottom: max(env(safe-area-inset-bottom), 16px);
+            max-height: 90dvh;
+            display: flex; flex-direction: column;
+            transform: translateY(100%);
+            transition: transform .42s var(--spring);
+            
+            background: rgba(28, 28, 30, 0.85);
+            backdrop-filter: blur(35px);
+            -webkit-backdrop-filter: blur(35px);
+            border-top: 1px solid rgba(255,255,255,0.15);
+            border-radius: 36px 36px 0 0;
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.4);
+        }
+        .ov.vis .sh { transform: translateY(0); }
+
+        .gb {
+            padding: 14px 0 16px;
+            cursor: grab;
+            touch-action: none;
+            display: flex;
+            justify-content: center;
+        }
+        .gb::after {
+            content: '';
+            width: 44px; height: 5px;
+            background: rgba(255,255,255,0.4);
+            border-radius: 3px;
+        }
+
+        /* Header arrastrable */
+        .m-header { margin-bottom: 20px; text-align: left; padding-left: 4px; cursor: grab; touch-action: none; }
+        .m-subtitle { font-size: 13px; color: var(--label-2); font-weight: 600; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 4px; }
+        .m-title { font-size: 32px; font-weight: 800; color: #fff; letter-spacing: -0.8px; line-height: 1; }
+
+        /* --- LISTA DE TURNOS INTELIGENTE --- */
+        .gs { overflow-y: auto; max-height: 40vh; scrollbar-width: none; overscroll-behavior: contain; margin-bottom: 16px; padding-right: 4px; }
+        .s-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: rgba(255,255,255,0.06); border-radius: 16px; margin-bottom: 8px; cursor: pointer; transition: transform 0.15s, background 0.15s; }
+        .s-row:last-child { margin-bottom: 0; }
+        .s-row:active { transform: scale(0.97); background: rgba(255,255,255,0.1); }
+        .s-row.sel { background: rgba(255,255,255,0.12); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .s-row-left { display: flex; align-items: center; gap: 14px; }
+        .s-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+        .s-name { font-size: 16px; font-weight: 500; color: #fff; }
+        
+        .s-btn-alt { width: 100%; background: rgba(255, 159, 10, 0.1); color: var(--orange); border: none; border-radius: 16px; padding: 14px; font-size: 15px; font-weight: 600; margin-bottom: 20px; cursor: pointer; transition: transform 0.15s, background 0.15s; font-family: inherit; }
+        .s-btn-alt:active { transform: scale(0.97); background: rgba(255, 159, 10, 0.15); }
+        .s-btn-alt.danger { color: var(--red); background: rgba(255, 69, 58, 0.1); }
+        .s-btn-alt.danger:active { background: rgba(255, 69, 58, 0.15); }
+
+        .ag { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
+        .ab { background: rgba(255,255,255,0.08); border: none; border-radius: 16px; padding: 14px; font-size: 15px; font-weight: 600; color: #fff; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+        .ab:active { transform: scale(0.96); background: rgba(255,255,255,0.12); }
+        .ab.danger { color: var(--red); background: rgba(255, 69, 58, 0.1); }
+        .ab.danger:active { background: rgba(255, 69, 58, 0.15); }
+        .ab.success { color: var(--green); background: rgba(48, 209, 88, 0.1); }
+        .ab.success:active { background: rgba(48, 209, 88, 0.15); }
+
+        .btn-close { width: 100%; background: rgba(255,255,255,0.1); color: #fff; border: none; border-radius: 100px; padding: 16px; font-size: 17px; font-weight: 600; margin-top: auto; cursor: pointer; transition: transform 0.15s, background 0.15s; font-family: inherit; }
+        .btn-close:active { transform: scale(0.97); background: rgba(255,255,255,0.15); }
+
+        /* --- ESTILOS ANTIGUOS PARA CONFIG, STATS Y LEGEND --- */
+        .gg { background: rgba(255,255,255,0.06); border-radius: 18px; overflow: hidden; margin-bottom: 8px; }
+        .ob { width: 100%; padding: 16px; background: none; border: none; border-bottom: 0.5px solid rgba(255,255,255,0.08); color: var(--blue); font-size: 18px; font-weight: 500; text-align: center; cursor: pointer; display: block; font-family: inherit; transition: background .1s; }
+        .ob:last-child { border-bottom: none; }
+        .ob:active { background: rgba(255,255,255,0.1); }
+        .ob.lb { color: var(--label-3); font-size: 13px; font-weight: 600; pointer-events: none; letter-spacing: .3px; padding: 14px 16px; }
+        .ob.dl { color: var(--red); }
+        .oc { width: 100%; padding: 16px; background: rgba(255,255,255,0.1); border: none; border-radius: 18px; color: #fff; font-size: 18px; font-weight: 600; text-align: center; cursor: pointer; font-family: inherit; margin-top: 8px; transition: background .1s; }
+        .oc:active { background: rgba(255,255,255,0.15); }
+        .cf { display: flex; align-items: center; padding: 12px 16px; gap: 12px; border-bottom: 0.5px solid rgba(255,255,255,0.08); }
+        .cf:last-child { border-bottom: none; }
+        .cc { width: 28px; height: 28px; border-radius: 50%; position: relative; overflow: hidden; flex-shrink: 0; }
+        .cc input { position: absolute; top: -12px; left: -12px; width: 52px; height: 52px; opacity: 0; cursor: pointer; }
+        .cn { flex: 1; background: none; border: none; color: var(--label); font-size: 17px; font-weight: 400; outline: none; min-width: 0; font-family: inherit; }
+        .sw { position: relative; width: 51px; height: 31px; flex-shrink: 0; }
+        .sw input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .sw-t { position: absolute; inset: 0; border-radius: 16px; transition: background .28s var(--ease); cursor: pointer; background: var(--surface-3); }
+        .sw-t::after { content: ''; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; background: #fff; border-radius: 50%; transition: transform .28s var(--spring); box-shadow: 0 3px 8px rgba(0,0,0,.15), 0 1px 1px rgba(0,0,0,.16); }
+        .sw input:checked + .sw-t::after { transform: translateX(20px); }
+        .cd { width: 24px; height: 24px; background: none; border: none; color: var(--red); font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; opacity: .7; transition: opacity .15s, transform .18s var(--spring); line-height: 1; }
+        .cd:active { transform: scale(.8); opacity: 1; }
+        .nl { font-size: 13px; color: var(--label-3); flex-shrink: 0; margin-right: 2px; }
+        .sr { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 0.5px solid rgba(255,255,255,0.08); }
+        .sr:last-child { border-bottom: none; }
+        .sl { font-size: 17px; color: var(--label-2); display: flex; align-items: center; gap: 8px; }
+        .sv { font-size: 17px; font-weight: 600; }
+        .sd { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .lr { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 0.5px solid rgba(255,255,255,0.08); font-size: 17px; }
+        .lr:last-child { border-bottom: none; }
+        .ld { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+        .ls { font-size: 13px; color: var(--label-3); margin-left: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="app" id="app">
+    <div class="nav">
+        <div class="nav-title" id="ml"></div>
+        <div class="nav-actions">
+            <button class="nav-btn" onclick="openConfig()" aria-label="Configuración">
+                <svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+            <button class="nav-btn" onclick="moveMonth(-1)" aria-label="Anterior">
+                <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <button class="nav-btn" onclick="moveMonth(1)" aria-label="Siguiente">
+                <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <div class="cal" id="cal">
+        <div class="wk">
+            <span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span>
+        </div>
+        <div class="gr" id="gr"></div>
+    </div>
+</div>
+
+<!-- Nuevo Dock Flotante Inferior -->
+<div class="bottom-dock-wrapper">
+    <div class="bottom-dock">
+        <div class="dock-item" onclick="openStats()">
+            <div class="dock-val" id="pN">0</div>
+            <div class="dock-lbl">Turnos</div>
+        </div>
+        <div class="dock-sep"></div>
+        <div class="dock-item" id="pU" onclick="openStats()">
+            <div class="dock-val alert" id="pUN">0</div>
+            <div class="dock-lbl">Pend.</div>
+        </div>
+        <div class="dock-sep"></div>
+        <div class="dock-item" onclick="openLeg()">
+            <div class="dock-dots-container" id="pD"></div>
+            <div class="dock-lbl">Leyenda</div>
+        </div>
+    </div>
+</div>
+
+<div class="ov" id="ov" onclick="if(event.target===this)closeModal()">
+    <div class="sh" id="sh"></div>
+</div>
+
+<script>
+var vd=new Date(),sk=null,busy=false,dir=1;
+
+var def={
+    s1:{name:"Policlínico",isNight:false,color:"#30d158"},
+    s2:{name:"Urgencia Día",isNight:false,color:"#ff9f0a"},
+    s3:{name:"Urgencia Noche",isNight:true,color:"#bf5af2"},
+    s4:{name:"COMPIN",isNight:false,color:"#ff453a"}
+};
+
+var cfg=JSON.parse(localStorage.getItem('calendar_settings_v8'))||def;
+var dat=JSON.parse(localStorage.getItem('calendar_data_v8'))||{};
+var mn=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+// Swipe
+var tx=0,cal=document.getElementById('cal');
+cal.addEventListener('touchstart',function(e){tx=e.changedTouches[0].screenX},{passive:true});
+cal.addEventListener('touchend',function(e){var d=e.changedTouches[0].screenX-tx;if(d<-50)moveMonth(1);else if(d>50)moveMonth(-1);},{passive:true});
+
+function render(a){
+    var g=document.getElementById('gr'),c=document.getElementById('cal');
+    if(a){c.classList.remove('al','ar');void c.offsetWidth;c.classList.add(dir>0?'al':'ar');}
+    else c.classList.remove('al','ar');
+
+    g.innerHTML='';
+    var y=vd.getFullYear(),m=vd.getMonth();
+    var lb=document.getElementById('ml');
+    if(a){
+        lb.style.transition='opacity .15s,transform .15s';lb.style.opacity='0';lb.style.transform='translateY(-4px)';
+        setTimeout(function(){lb.innerHTML=mn[m]+' <span class="yr">'+y+'</span>';lb.style.opacity='1';lb.style.transform='';},130);
+    } else { lb.innerHTML=mn[m]+' <span class="yr">'+y+'</span>';lb.style.opacity='1';lb.style.transform=''; }
+
+    var fd=new Date(y,m,1).getDay(),off=fd===0?6:fd-1;
+    var td=new Date(y,m+1,0).getDate(),wk=0,up=0;
+
+    for(var i=0;i<off;i++)g.appendChild(Object.assign(document.createElement('div'),{className:'d e'}));
+
+    for(var d=1;d<=td;d++){
+        var key=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+        var el=document.createElement('div');
+        var dow=new Date(y,m,d).getDay();
+        el.className='d';
+        if(dow===0||dow===6)el.classList.add('w');
+        el.textContent=d;
+        if(a){el.classList.add('rv');el.style.animationDelay=(off+d-1)*10+'ms';}
+
+        var now=new Date();
+        if(d===now.getDate()&&m===now.getMonth()&&y===now.getFullYear())el.classList.add('td');
+        
+        if(dat[key]){
+            var types = dat[key].types || (dat[key].type ? [dat[key].type] : []);
+            var hasValid = types.some(function(t){return cfg[t]});
+            if(hasValid){
+                wk++;
+                if(!dat[key].paid) up++;
+            }
+        }
+        
+        applyShift(el,key);
+        el.onclick=(function(k){return function(){openDay(k)}})(key);
+        g.appendChild(el);
+    }
+
+    // Actualizar Dock Inferior
+    document.getElementById('pN').textContent=wk;
+    document.getElementById('pUN').textContent=up;
+    document.getElementById('pU').classList.toggle('ph',up===0);
+    
+    // Leyenda de Puntos en el Dock
+    var dots=document.getElementById('pD');
+    var dotHTML = '';
+    var keys = Object.keys(cfg);
+    var maxDots = 4; // Mostrar máximo 4 puntitos en el dock para que no se desborde
+    for(var i=0; i<Math.min(keys.length, maxDots); i++){
+        dotHTML += '<div class="dock-dot" style="background:'+cfg[keys[i]].color+'"></div>';
+    }
+    if(keys.length > maxDots) dotHTML += '<div class="dock-dot" style="background:var(--label-3);width:4px;height:4px;box-shadow:none;"></div>';
+    dots.innerHTML = dotHTML;
+}
+
+function applyShift(el,key){
+    var e=dat[key], pk=relD(key,-1), pe=dat[pk];
+    
+    var tToday = [];
+    if (e) {
+        if (e.types) tToday = e.types.filter(function(t){return cfg[t]});
+        else if (e.type && cfg[e.type]) tToday = [e.type];
+    }
+    
+    var tYest = [];
+    if (pe) {
+        if (pe.types) tYest = pe.types.filter(function(t){return cfg[t]});
+        else if (pe.type && cfg[pe.type]) tYest = [pe.type];
+    }
+    
+    var colors = [];
+    var yestNight = tYest.find(function(t){return cfg[t].isNight});
+    
+    if (yestNight) colors.push(cfg[yestNight].color);
+    
+    tToday.forEach(function(t){colors.push(cfg[t].color)});
+    
+    if (tToday.length === 0 && yestNight) {
+        colors.push('transparent');
+    } else if (tToday.length === 1 && cfg[tToday[0]].isNight && !yestNight) {
+        colors.unshift('transparent');
+    }
+    
+    if (colors.length > 0) {
+        el.classList.add('has-shift');
+        el.style.fontWeight = '700';
+        
+        if (colors.includes('transparent')) el.style.color = '#ffffff';
+        else el.style.color = '#000000';
+        
+        if (colors.length === 1) {
+            el.style.background = colors[0];
+            el.style.boxShadow = '0 4px 14px ' + colors[0] + '4D'; // Sombra suave del color del turno
+        } else if (colors.length === 2) {
+            el.style.background = 'linear-gradient(135deg, ' + colors[0] + ' 50%, ' + colors[1] + ' 50%)';
+            el.style.boxShadow = '0 4px 14px ' + colors[1] + '4D';
+        } else if (colors.length === 3) {
+            el.style.background = 'linear-gradient(135deg, ' + colors[0] + ' 33.3%, ' + colors[1] + ' 33.3%, ' + colors[1] + ' 66.6%, ' + colors[2] + ' 66.6%)';
+        } else if (colors.length >= 4) {
+            el.style.background = 'linear-gradient(135deg, ' + colors[0] + ' 25%, ' + colors[1] + ' 25%, ' + colors[1] + ' 50%, ' + colors[2] + ' 50%, ' + colors[2] + ' 75%, ' + colors[3] + ' 75%)';
+        }
+    } else {
+        el.style.background = '';
+        el.style.boxShadow = '';
+        el.classList.remove('has-shift');
+    }
+
+    if(e && e.paid){var b=document.createElement('div');b.className='bx';b.textContent='$';el.appendChild(b);}
+}
+
+// ----------------------------------------------------------------------
+// MODAL DE DIA 
+// ----------------------------------------------------------------------
+
+function openDay(key){
+    sk=key;
+    renderMainDayModal();
+    showModal();
+}
+
+function renderMainDayModal(){
+    var e = dat[sk] || {};
+    var types = e.types || (e.type ? [e.type] : []);
+    var p = sk.split('-');
+    var dayNum = parseInt(p[2]);
+    var monthName = mn[parseInt(p[1])-1];
+    
+    var h = '<div class="gb"></div>';
+    
+    h += '<div class="m-header"><div class="m-subtitle">Gestión de Turnos</div><div class="m-title">'+dayNum+' de '+monthName+'</div></div>';
+
+    h += '<div class="gs">';
+    Object.keys(cfg).forEach(function(id){
+        var isSel = types.includes(id);
+        var color = cfg[id].color;
+        
+        h += '<div class="s-row '+(isSel?'sel':'')+'" onclick="saveS(\''+id+'\')">';
+            h += '<div class="s-row-left">';
+                h += '<div class="s-dot" style="background: '+color+'; box-shadow: 0 0 6px '+color+';"></div>';
+                h += '<span class="s-name" style="'+(isSel?'color:'+color+';font-weight:600;':'')+'">'+cfg[id].name+'</span>';
+            h += '</div>';
+            if(isSel) {
+                h += '<svg viewBox="0 0 24 24" width="20" height="20" style="color:'+color+'"><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M20 6L9 17l-5-5"/></svg>';
+            }
+        h += '</div>';
+    });
+    h += '</div>';
+
+    if(types.length === 1) {
+        h += '<button class="s-btn-alt" onclick="renderSecondShift()">+ Agregar 2do Turno</button>';
+    } else if (types.length >= 2) {
+        h += '<button class="s-btn-alt danger" onclick="removeSecondShift()">- Quitar 2do Turno</button>';
+    }
+
+    h += '<div class="ag">';
+    if(e.paid) {
+        h += '<button class="ab success" onclick="toggleP()"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>Pagado</button>';
+    } else {
+        h += '<button class="ab" onclick="toggleP()"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>Pago</button>';
+    }
+    h += '<button class="ab danger" onclick="saveS(null)"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>Eliminar</button>';
+    h += '</div>';
+
+    h += '<button class="btn-close" onclick="closeModal()">Cerrar</button>';
+       
+    document.getElementById('sh').innerHTML = h;
+}
+
+function renderSecondShift(){
+    var h = '<div class="gb"></div>';
+    h += '<div class="m-header"><div class="m-subtitle">Selecciona el</div><div class="m-title" style="color:var(--orange)">2do Turno</div></div>';
+    
+    h += '<div class="gs">';
+    Object.keys(cfg).forEach(function(id){
+        var color = cfg[id].color;
+        h += '<div class="s-row" onclick="saveSecond(\''+id+'\')">';
+            h += '<div class="s-row-left">';
+                h += '<div class="s-dot" style="background: '+color+'; box-shadow: 0 0 6px '+color+';"></div>';
+                h += '<span class="s-name">'+cfg[id].name+'</span>';
+            h += '</div>';
+        h += '</div>';
+    });
+    h += '</div>';
+    
+    h += '<button class="btn-close" onclick="renderMainDayModal()">Volver Atrás</button>';
+    
+    document.getElementById('sh').innerHTML = h;
+}
+
+function saveS(id){
+    if(id === null) {
+        delete dat[sk];
+    } else {
+        if(!dat[sk]) dat[sk] = {paid: false};
+        dat[sk].types = [id];
+        delete dat[sk].type;
+    }
+    commit();
+}
+
+function saveSecond(id){
+    if(!dat[sk]) dat[sk] = {paid: false};
+    if(!dat[sk].types) dat[sk].types = dat[sk].type ? [dat[sk].type] : [];
+    
+    dat[sk].types.push(id);
+    delete dat[sk].type;
+    
+    commit();
+}
+
+function removeSecondShift(){
+    if(dat[sk] && dat[sk].types && dat[sk].types.length > 1){
+        dat[sk].types = [dat[sk].types[0]];
+    }
+    commit();
+}
+
+function toggleP(){
+    if(!dat[sk]) dat[sk] = {paid: false};
+    dat[sk].paid = !dat[sk].paid;
+    commit();
+}
+
+function commit(){
+    localStorage.setItem('calendar_data_v8', JSON.stringify(dat));
+    render(false);
+    closeModal();
+}
+
+// ----------------------------------------------------------------------
+// MODALES ADICIONALES (CONFIG, STATS, LEGEND) ACTUALIZADOS AL GLASSMORPHISM
+// ----------------------------------------------------------------------
+
+function openConfig(){
+    var h='<div class="gb"></div>';
+    h+='<div class="m-header" style="display:flex; justify-content:space-between; align-items:center; padding-right:10px;">';
+    h+='<div><div class="m-subtitle">Ajustes</div><div class="m-title" style="font-size:28px;">Configuración</div></div>';
+    h+='<span onclick="closeModal()" style="color:var(--blue);cursor:pointer;font-size:17px;font-weight:600;">OK</span>';
+    h+='</div>';
+    
+    h+='<div class="gs" style="max-height: 50vh;">';
+    Object.keys(cfg).forEach(function(id){
+        h+='<div class="cf" style="background:rgba(255,255,255,0.04); border-radius:16px; margin-bottom:8px; border:none;">'+
+            '<div class="cc" style="background:'+cfg[id].color+'"><input type="color" value="'+cfg[id].color+'" onchange="uCfg(\''+id+'\',\'color\',this.value)"></div>'+
+            '<input class="cn" type="text" value="'+cfg[id].name+'" onchange="uCfg(\''+id+'\',\'name\',this.value)">'+
+            '<span class="nl">Noche</span>'+
+            '<label class="sw"><input type="checkbox" '+(cfg[id].isNight?'checked':'')+' onchange="this.parentElement.querySelector(\'.sw-t\').style.background=this.checked?\'var(--green)\':\'var(--surface-3)\';uCfg(\''+id+'\',\'isNight\',this.checked)">'+
+            '<span class="sw-t" style="background:'+(cfg[id].isNight?'var(--green)':'var(--surface-3)')+'"></span></label>'+
+            '<button class="cd" onclick="rmS(\''+id+'\')">−</button></div>';
+    });
+    h+='</div>';
+    
+    h+='<button class="oc" style="color:var(--green); background:rgba(48,209,88,0.15);" onclick="addS()">+ Agregar Turno</button>';
+    document.getElementById('sh').innerHTML=h;showModal();
+}
+
+function openStats(){
+    var y=vd.getFullYear(),m=vd.getMonth(),td=new Date(y,m+1,0).getDate();
+    var w=0,u=0,p=0,sc={};
+    for(var d=1;d<=td;d++){
+        var k=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+        if(dat[k]){
+            var types = dat[k].types || (dat[k].type ? [dat[k].type] : []);
+            var hasValidShift = false;
+            types.forEach(function(t){
+                if(cfg[t]) {
+                    sc[t] = (sc[t]||0)+1;
+                    hasValidShift = true;
+                }
+            });
+            if(hasValidShift){
+                w++;
+                if(dat[k].paid) p++; else u++;
+            }
+        }
+    }
+    
+    var h='<div class="gb"></div>';
+    h+='<div class="m-header"><div class="m-subtitle">Resumen Mensual</div><div class="m-title">Estadísticas</div></div>';
+    
+    h+='<div class="gg" style="background:rgba(255,255,255,0.06); padding:4px;">'+
+        '<div class="sr" style="border-bottom:1px solid rgba(255,255,255,0.05);"><span class="sl">Días con turno</span><span class="sv" style="color:var(--blue); font-size:20px;">'+w+'</span></div>'+
+        '<div class="sr" style="border-bottom:1px solid rgba(255,255,255,0.05);"><span class="sl">Pagados</span><span class="sv" style="color:var(--green); font-size:20px;">'+p+'</span></div>'+
+        '<div class="sr" style="border-bottom:none;"><span class="sl">Pendientes</span><span class="sv" style="color:var(--red); font-size:20px;">'+u+'</span></div>'+
+        '</div>';
+        
+    h+='<div class="m-subtitle" style="margin-top:20px; margin-bottom:10px; padding-left:4px;">Desglose de Turnos</div>';
+    h+='<div class="gg" style="background:rgba(255,255,255,0.06); padding:4px;">';
+    var keys = Object.keys(sc);
+    keys.forEach(function(t, index){
+        var border = index === keys.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.05)';
+        h+='<div class="sr" style="border-bottom:'+border+';"><span class="sl"><span class="sd" style="background:'+cfg[t].color+'; box-shadow:0 0 6px '+cfg[t].color+';"></span>'+cfg[t].name+'</span><span class="sv">'+sc[t]+'</span></div>';
+    });
+    if(keys.length === 0) h+='<div class="sr" style="border:none; justify-content:center; color:var(--label-3);">No hay turnos registrados</div>';
+    h+='</div>';
+    
+    h+='<button class="btn-close" style="margin-top:20px;" onclick="closeModal()">Cerrar</button>';
+    document.getElementById('sh').innerHTML=h;showModal();
+}
+
+function openLeg(){
+    var h='<div class="gb"></div>';
+    h+='<div class="m-header"><div class="m-subtitle">Información</div><div class="m-title">Leyenda</div></div>';
+    
+    h+='<div class="gg" style="background:rgba(255,255,255,0.06); padding:4px;">';
+    var keys = Object.keys(cfg);
+    keys.forEach(function(id, index){
+        var border = index === keys.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.05)';
+        h+='<div class="lr" style="border-bottom:'+border+';"><div class="ld" style="background:'+cfg[id].color+'; box-shadow:0 0 6px '+cfg[id].color+';"></div><span style="font-weight:500;">'+cfg[id].name+'</span>'+(cfg[id].isNight?'<span class="ls" style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:100px; font-size:11px; margin-left:auto;">NOCHE</span>':'')+'</div>';
+    });
+    h+='</div>';
+    
+    h+='<button class="btn-close" style="margin-top:20px;" onclick="closeModal()">Cerrar</button>';
+    document.getElementById('sh').innerHTML=h;showModal();
+}
+
+function addS(){
+    var ids=Object.keys(cfg).map(function(k){return parseInt(k.replace('s',''))}).filter(function(n){return!isNaN(n)});
+    var nid='s'+(ids.length?Math.max.apply(null,ids)+1:1);
+    var cols=['#30d158','#ff9f0a','#bf5af2','#ff453a','#64d2ff','#ffd60a','#ff375f','#ac8e68'];
+    cfg[nid]={name:'Nuevo Turno',isNight:false,color:cols[Object.keys(cfg).length%cols.length]};
+    localStorage.setItem('calendar_settings_v8',JSON.stringify(cfg));render(false);openConfig();
+}
+
+function rmS(id){
+    if(Object.keys(cfg).length<=1)return;
+    Object.keys(dat).forEach(function(k){
+        if(dat[k]) {
+            if (dat[k].types) {
+                dat[k].types = dat[k].types.filter(function(t){return t !== id});
+                if(dat[k].types.length === 0 && !dat[k].paid) delete dat[k];
+            } else if (dat[k].type === id) {
+                delete dat[k];
+            }
+        }
+    });
+    delete cfg[id];
+    localStorage.setItem('calendar_settings_v8',JSON.stringify(cfg));
+    localStorage.setItem('calendar_data_v8',JSON.stringify(dat));
+    render(false);openConfig();
+}
+
+function uCfg(id,k,v){cfg[id][k]=v;localStorage.setItem('calendar_settings_v8',JSON.stringify(cfg));render(false);}
+
+function showModal(){
+    var ov=document.getElementById('ov'),sh=document.getElementById('sh');
+    sh.style.transform='';sh.style.transition='';
+    ov.classList.add('on');
+    requestAnimationFrame(function(){requestAnimationFrame(function(){
+        sh.style.transition='transform .42s '+getComputedStyle(document.documentElement).getPropertyValue('--spring');
+        ov.classList.add('vis');
+    })});
+    drag(sh);
+}
+
+function closeModal(){
+    var ov=document.getElementById('ov'),sh=document.getElementById('sh');
+    sh.style.transition='transform .32s '+getComputedStyle(document.documentElement).getPropertyValue('--spring');
+    sh.style.transform='translateY(100%)';
+    ov.classList.remove('vis');
+    setTimeout(function(){ov.classList.remove('on');sh.style.transform='';sh.style.transition='';},350);
+}
+
+function drag(sh){
+    var y0=0,dy=0,on=false;
+    var clone = sh.cloneNode(true);
+    sh.parentNode.replaceChild(clone, sh);
+    sh = clone;
+    
+    sh.addEventListener('touchstart',function(e){
+        if(e.target.closest('.gb') || e.target.closest('.m-header')){on=true;y0=e.touches[0].clientY;sh.style.transition='none';}
+    },{passive:true});
+    sh.addEventListener('touchmove',function(e){
+        if(!on)return;
+        e.preventDefault(); 
+        dy=e.touches[0].clientY-y0;if(dy<0)dy=0;
+        sh.style.transform='translateY('+dy+'px)';
+    },{passive:false});
+    sh.addEventListener('touchend',function(){
+        if(!on)return;on=false;
+        sh.style.transition='transform .32s '+getComputedStyle(document.documentElement).getPropertyValue('--spring');
+        if(dy>80)closeModal();else sh.style.transform='translateY(0)';
+        dy=0;
+    },{passive:true});
+}
+
+function moveMonth(d){
+    if(busy)return;busy=true;dir=d;vd.setMonth(vd.getMonth()+d);render(true);
+    setTimeout(function(){busy=false},320);
+}
+
+function relD(s,o){var d=new Date(s+'T00:00:00');d.setDate(d.getDate()+o);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+
+document.getElementById('ov').addEventListener('touchmove', function(e) {
+    if (!e.target.closest('.gs') && !e.target.closest('.cf') && !e.target.closest('.gg')) {
+        e.preventDefault();
+    }
+}, { passive: false });
+
+render(true);
+
+if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('./sw.js').catch(function(){});
+}
+</script>
+</body>
+</html>
